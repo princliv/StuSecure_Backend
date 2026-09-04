@@ -1,0 +1,218 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  STUDENT
+  GUARD
+  FACULTY
+  ADMIN
+}
+
+enum MovementType {
+  CHECK_IN
+  CHECK_OUT
+}
+
+enum EmergencyStatus {
+  ACTIVE
+  ACKNOWLEDGED
+  RESOLVED
+  CANCELLED
+}
+
+enum HelpRequestType {
+  TRANSPORTATION
+  MEDICAL
+  HOSTEL
+  SECURITY
+  OTHER
+}
+
+enum HelpRequestStatus {
+  PENDING
+  IN_PROGRESS
+  RESOLVED
+  CANCELLED
+}
+
+enum NotificationType {
+  CHECK_IN
+  CHECK_OUT
+  EMERGENCY
+  ANNOUNCEMENT
+  HELP_REQUEST
+  SYSTEM
+}
+
+model User {
+  id          String   @id @default(cuid())
+  firebaseUid String   @unique
+  name        String
+  email       String   @unique
+  role        Role
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  student       Student?
+  securityGuard SecurityGuard?
+  faculty       Faculty?
+  notifications Notification[]
+  auditLogs     AuditLog[]        @relation("AuditLogActor")
+  emergencies   Emergency[]       @relation("EmergencyResolver")
+}
+
+model Hostel {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+
+  rooms  Room[]
+  guards SecurityGuard[]
+}
+
+model Room {
+  id        String   @id @default(cuid())
+  hostelId  String
+  number    String
+  capacity  Int?
+  createdAt DateTime @default(now())
+
+  hostel   Hostel    @relation(fields: [hostelId], references: [id])
+  students Student[]
+
+  @@unique([hostelId, number])
+}
+
+model Student {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  enrollmentNo  String   @unique
+  roomId        String?
+  phone         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id])
+  room         Room?         @relation(fields: [roomId], references: [id])
+  qrIdentity   QRIdentity?
+  movementLogs MovementLog[]
+  emergencies  Emergency[]   @relation("EmergencyReporter")
+  helpRequests HelpRequest[]
+}
+
+model Faculty {
+  id         String   @id @default(cuid())
+  userId     String   @unique
+  employeeId String   @unique
+  department String?
+  createdAt  DateTime @default(now())
+
+  user               User          @relation(fields: [userId], references: [id])
+  assignedHelpRequests HelpRequest[] @relation("HelpRequestAssignee")
+}
+
+model SecurityGuard {
+  id         String   @id @default(cuid())
+  userId     String   @unique
+  employeeId String   @unique
+  hostelId   String?
+  shift      String?
+  createdAt  DateTime @default(now())
+
+  user         User          @relation(fields: [userId], references: [id])
+  hostel       Hostel?       @relation(fields: [hostelId], references: [id])
+  movementLogs MovementLog[]
+}
+
+model QRIdentity {
+  id        String    @id @default(cuid())
+  studentId String    @unique
+  token     String    @unique
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  rotatedAt DateTime?
+
+  student Student @relation(fields: [studentId], references: [id])
+}
+
+model MovementLog {
+  id        String       @id @default(cuid())
+  studentId String
+  guardId   String
+  type      MovementType
+  location  String?
+  createdAt DateTime     @default(now())
+
+  student Student       @relation(fields: [studentId], references: [id])
+  guard   SecurityGuard @relation(fields: [guardId], references: [id])
+
+  @@index([studentId])
+  @@index([guardId])
+}
+
+model Emergency {
+  id               String          @id @default(cuid())
+  reportedById     String
+  description      String
+  location         String?
+  status           EmergencyStatus @default(ACTIVE)
+  resolvedByUserId String?
+  createdAt        DateTime        @default(now())
+  resolvedAt       DateTime?
+
+  reportedBy Student @relation("EmergencyReporter", fields: [reportedById], references: [id])
+  resolvedBy User?   @relation("EmergencyResolver", fields: [resolvedByUserId], references: [id])
+
+  @@index([reportedById])
+}
+
+model HelpRequest {
+  id                  String            @id @default(cuid())
+  studentId           String
+  type                HelpRequestType
+  description         String
+  priority            String?
+  status              HelpRequestStatus @default(PENDING)
+  assignedToFacultyId String?
+  createdAt           DateTime          @default(now())
+  resolvedAt          DateTime?
+
+  student          Student  @relation(fields: [studentId], references: [id])
+  assignedToFaculty Faculty? @relation("HelpRequestAssignee", fields: [assignedToFacultyId], references: [id])
+
+  @@index([studentId])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  title     String
+  body      String
+  type      NotificationType
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+  readAt    DateTime?
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  actorUserId  String?
+  action       String
+  entityType   String
+  entityId     String
+  metadata     Json?
+  createdAt    DateTime @default(now())
+
+  actor User? @relation("AuditLogActor", fields: [actorUserId], references: [id])
+
+  @@index([entityType, entityId])
+}
