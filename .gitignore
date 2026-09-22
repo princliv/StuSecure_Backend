@@ -1,9 +1,31 @@
 node_modules/
 dist/
 
+# Environment / secrets
 .env
+.env.*
+!.env.example
 .env.local
+.env.*.local
 
+# Neon
+.neon
+.neon/
+
+# Firebase / Google Cloud credentials
+*firebase-adminsdk*.json
+*-firebase-adminsdk-*.json
+serviceAccount*.json
+service-account*.json
+google-services.json
+GoogleService-Info.plist
+*.pem
+*.p12
+*.key
+credentials.json
+secrets/
+
+# Logs
 npm-debug.log*
 *.log
 
