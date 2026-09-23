@@ -49,114 +49,180 @@ enum NotificationType {
   SYSTEM
 }
 
-model User {
-  id          String   @id @default(cuid())
-  firebaseUid String   @unique
-  name        String
-  email       String   @unique
-  role        Role
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+/// A tenant (college / hostel / campus). Every other model is scoped to one
+/// Organization via `organizationId` — see docs/StuSecure_SaaS_Plan.md §2.
+///
+/// v1 simplification: a User belongs to exactly one Organization (no
+/// many-to-many Membership model yet). Multi-org membership + org switching
+/// is deferred to SaaS_Plan.md Group G ("Invites + multi-org").
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  logoUrl   String?
+  plan      String   @default("FREE")
+  status    String   @default("ACTIVE")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
+  users          User[]
+  hostels        Hostel[]
+  rooms          Room[]
+  students       Student[]
+  faculty        Faculty[]
+  securityGuards SecurityGuard[]
+  qrIdentities   QRIdentity[]
+  movementLogs   MovementLog[]
+  emergencies    Emergency[]
+  helpRequests   HelpRequest[]
+  notifications  Notification[]
+  auditLogs      AuditLog[]
+}
+
+model User {
+  id             String   @id @default(cuid())
+  organizationId String
+  firebaseUid    String   @unique
+  name           String
+  email          String
+  role           Role
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization  Organization    @relation(fields: [organizationId], references: [id])
   student       Student?
   securityGuard SecurityGuard?
   faculty       Faculty?
   notifications Notification[]
-  auditLogs     AuditLog[]        @relation("AuditLogActor")
-  emergencies   Emergency[]       @relation("EmergencyResolver")
+  auditLogs     AuditLog[]      @relation("AuditLogActor")
+  emergencies   Emergency[]     @relation("EmergencyResolver")
+
+  @@unique([organizationId, email])
+  @@index([organizationId])
 }
 
 model Hostel {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  createdAt DateTime @default(now())
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  createdAt      DateTime @default(now())
 
-  rooms  Room[]
-  guards SecurityGuard[]
+  organization Organization    @relation(fields: [organizationId], references: [id])
+  rooms        Room[]
+  guards       SecurityGuard[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
 }
 
 model Room {
-  id        String   @id @default(cuid())
-  hostelId  String
-  number    String
-  capacity  Int?
-  createdAt DateTime @default(now())
+  id             String   @id @default(cuid())
+  organizationId String
+  hostelId       String
+  number         String
+  capacity       Int?
+  createdAt      DateTime @default(now())
 
-  hostel   Hostel    @relation(fields: [hostelId], references: [id])
-  students Student[]
+  organization Organization @relation(fields: [organizationId], references: [id])
+  hostel       Hostel       @relation(fields: [hostelId], references: [id])
+  students     Student[]
 
   @@unique([hostelId, number])
+  @@index([organizationId])
 }
 
 model Student {
-  id            String   @id @default(cuid())
-  userId        String   @unique
-  enrollmentNo  String   @unique
-  roomId        String?
-  phone         String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String   @unique
+  enrollmentNo   String
+  roomId         String?
+  phone          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
+  organization Organization  @relation(fields: [organizationId], references: [id])
   user         User          @relation(fields: [userId], references: [id])
   room         Room?         @relation(fields: [roomId], references: [id])
   qrIdentity   QRIdentity?
   movementLogs MovementLog[]
   emergencies  Emergency[]   @relation("EmergencyReporter")
   helpRequests HelpRequest[]
+
+  @@unique([organizationId, enrollmentNo])
+  @@index([organizationId])
 }
 
 model Faculty {
-  id         String   @id @default(cuid())
-  userId     String   @unique
-  employeeId String   @unique
-  department String?
-  createdAt  DateTime @default(now())
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String   @unique
+  employeeId     String
+  department     String?
+  createdAt      DateTime @default(now())
 
-  user               User          @relation(fields: [userId], references: [id])
+  organization         Organization  @relation(fields: [organizationId], references: [id])
+  user                 User          @relation(fields: [userId], references: [id])
   assignedHelpRequests HelpRequest[] @relation("HelpRequestAssignee")
+
+  @@unique([organizationId, employeeId])
+  @@index([organizationId])
 }
 
 model SecurityGuard {
-  id         String   @id @default(cuid())
-  userId     String   @unique
-  employeeId String   @unique
-  hostelId   String?
-  shift      String?
-  createdAt  DateTime @default(now())
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String   @unique
+  employeeId     String
+  hostelId       String?
+  shift          String?
+  createdAt      DateTime @default(now())
 
+  organization Organization  @relation(fields: [organizationId], references: [id])
   user         User          @relation(fields: [userId], references: [id])
   hostel       Hostel?       @relation(fields: [hostelId], references: [id])
   movementLogs MovementLog[]
+
+  @@unique([organizationId, employeeId])
+  @@index([organizationId])
 }
 
 model QRIdentity {
-  id        String    @id @default(cuid())
-  studentId String    @unique
-  token     String    @unique
-  isActive  Boolean   @default(true)
-  createdAt DateTime  @default(now())
-  rotatedAt DateTime?
+  id             String    @id @default(cuid())
+  organizationId String
+  studentId      String    @unique
+  token          String    @unique
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  rotatedAt      DateTime?
 
-  student Student @relation(fields: [studentId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+  student      Student      @relation(fields: [studentId], references: [id])
+
+  @@index([organizationId])
 }
 
 model MovementLog {
-  id        String       @id @default(cuid())
-  studentId String
-  guardId   String
-  type      MovementType
-  location  String?
-  createdAt DateTime     @default(now())
+  id             String       @id @default(cuid())
+  organizationId String
+  studentId      String
+  guardId        String
+  type           MovementType
+  location       String?
+  createdAt      DateTime     @default(now())
 
-  student Student       @relation(fields: [studentId], references: [id])
-  guard   SecurityGuard @relation(fields: [guardId], references: [id])
+  organization Organization  @relation(fields: [organizationId], references: [id])
+  student      Student       @relation(fields: [studentId], references: [id])
+  guard        SecurityGuard @relation(fields: [guardId], references: [id])
 
+  @@index([organizationId])
   @@index([studentId])
   @@index([guardId])
 }
 
 model Emergency {
   id               String          @id @default(cuid())
+  organizationId   String
   reportedById     String
   description      String
   location         String?
@@ -165,14 +231,17 @@ model Emergency {
   createdAt        DateTime        @default(now())
   resolvedAt       DateTime?
 
-  reportedBy Student @relation("EmergencyReporter", fields: [reportedById], references: [id])
-  resolvedBy User?   @relation("EmergencyResolver", fields: [resolvedByUserId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+  reportedBy   Student      @relation("EmergencyReporter", fields: [reportedById], references: [id])
+  resolvedBy   User?        @relation("EmergencyResolver", fields: [resolvedByUserId], references: [id])
 
+  @@index([organizationId])
   @@index([reportedById])
 }
 
 model HelpRequest {
   id                  String            @id @default(cuid())
+  organizationId      String
   studentId           String
   type                HelpRequestType
   description         String
@@ -182,37 +251,45 @@ model HelpRequest {
   createdAt           DateTime          @default(now())
   resolvedAt          DateTime?
 
-  student          Student  @relation(fields: [studentId], references: [id])
-  assignedToFaculty Faculty? @relation("HelpRequestAssignee", fields: [assignedToFacultyId], references: [id])
+  organization      Organization @relation(fields: [organizationId], references: [id])
+  student           Student      @relation(fields: [studentId], references: [id])
+  assignedToFaculty Faculty?     @relation("HelpRequestAssignee", fields: [assignedToFacultyId], references: [id])
 
+  @@index([organizationId])
   @@index([studentId])
 }
 
 model Notification {
-  id        String           @id @default(cuid())
-  userId    String
-  title     String
-  body      String
-  type      NotificationType
-  isRead    Boolean          @default(false)
-  createdAt DateTime         @default(now())
-  readAt    DateTime?
+  id             String           @id @default(cuid())
+  organizationId String
+  userId         String
+  title          String
+  body           String
+  type           NotificationType
+  isRead         Boolean          @default(false)
+  createdAt      DateTime         @default(now())
+  readAt         DateTime?
 
-  user User @relation(fields: [userId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
 
+  @@index([organizationId])
   @@index([userId])
 }
 
 model AuditLog {
-  id           String   @id @default(cuid())
-  actorUserId  String?
-  action       String
-  entityType   String
-  entityId     String
-  metadata     Json?
-  createdAt    DateTime @default(now())
+  id             String   @id @default(cuid())
+  organizationId String
+  actorUserId    String?
+  action         String
+  entityType     String
+  entityId       String
+  metadata       Json?
+  createdAt      DateTime @default(now())
 
-  actor User? @relation("AuditLogActor", fields: [actorUserId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+  actor        User?        @relation("AuditLogActor", fields: [actorUserId], references: [id])
 
+  @@index([organizationId])
   @@index([entityType, entityId])
 }
