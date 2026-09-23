@@ -70,6 +70,57 @@ async function main() {
       },
     });
 
+    if (demo.role === "STUDENT") {
+      const hostel = await prisma.hostel.upsert({
+        where: {
+          organizationId_name: { organizationId: organization.id, name: "Block B" },
+        },
+        update: {},
+        create: { organizationId: organization.id, name: "Block B" },
+      });
+
+      const room = await prisma.room.upsert({
+        where: { hostelId_number: { hostelId: hostel.id, number: "302" } },
+        update: {},
+        create: {
+          organizationId: organization.id,
+          hostelId: hostel.id,
+          number: "302",
+          capacity: 2,
+        },
+      });
+
+      await prisma.student.upsert({
+        where: { userId: user.id },
+        update: { enrollmentNo: "STU-2023-8472", roomId: room.id },
+        create: {
+          organizationId: organization.id,
+          userId: user.id,
+          enrollmentNo: "STU-2023-8472",
+          roomId: room.id,
+        },
+      });
+    }
+
+    if (demo.role === "GUARD") {
+      const hostel = await prisma.hostel.findUnique({
+        where: {
+          organizationId_name: { organizationId: organization.id, name: "Block B" },
+        },
+      });
+
+      await prisma.securityGuard.upsert({
+        where: { userId: user.id },
+        update: { employeeId: "GRD-0001", hostelId: hostel?.id ?? null },
+        create: {
+          organizationId: organization.id,
+          userId: user.id,
+          employeeId: "GRD-0001",
+          hostelId: hostel?.id ?? null,
+        },
+      });
+    }
+
     logger.info(`Seeded ${user.role} user: ${user.email} (${user.id})`);
   }
 
