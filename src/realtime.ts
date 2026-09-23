@@ -14,6 +14,7 @@ export function initRealtime(httpServer: HttpServer) {
       if (typeof orgId === "string" && orgId.length > 0) {
         socket.join(`org:${orgId}:monitoring`);
         socket.join(`org:${orgId}:emergencies`);
+        socket.join(`org:${orgId}:help`);
       }
     });
   });
@@ -28,4 +29,8 @@ export function emitOrgMovement(orgId: string, payload: unknown) {
 
 export function emitOrgEmergency(orgId: string, event: string, payload: unknown) {
   io?.to(`org:${orgId}:emergencies`).emit(event, payload);
+}
+
+export function emitOrgHelp(orgId: string, event: string, payload: unknown) {
+  io?.to(`org:${orgId}:help`).emit(event, payload);
 }

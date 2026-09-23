@@ -102,6 +102,19 @@ async function main() {
       });
     }
 
+    if (demo.role === "FACULTY") {
+      await prisma.faculty.upsert({
+        where: { userId: user.id },
+        update: { employeeId: "FAC-0001" },
+        create: {
+          organizationId: organization.id,
+          userId: user.id,
+          employeeId: "FAC-0001",
+          department: "Student Affairs",
+        },
+      });
+    }
+
     if (demo.role === "GUARD") {
       const hostel = await prisma.hostel.findUnique({
         where: {

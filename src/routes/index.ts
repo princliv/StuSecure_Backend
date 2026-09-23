@@ -5,6 +5,7 @@ import { orgsRouter } from "./orgs.routes.js";
 import { qrRouter } from "./qr.routes.js";
 import { movementRouter } from "./movement.routes.js";
 import { emergencyRouter } from "./emergency.routes.js";
+import { helpRouter } from "./help.routes.js";
 
 export const apiRouter = Router();
 
@@ -14,6 +15,7 @@ apiRouter.use("/orgs", orgsRouter);
 apiRouter.use("/qr", qrRouter);
 apiRouter.use("/movements", movementRouter);
 apiRouter.use("/emergency", emergencyRouter);
+apiRouter.use("/help", helpRouter);
 
 // Student, guard, faculty, movement, emergency, help-request and
 // notification routers are added here as their phases land.
