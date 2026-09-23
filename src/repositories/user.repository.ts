@@ -19,4 +19,10 @@ export const userRepository = {
       data,
       include: { organization: true },
     }),
+
+  findIdsByRoles: (organizationId: string, roles: Role[]) =>
+    prisma.user.findMany({
+      where: { organizationId, role: { in: roles } },
+      select: { id: true },
+    }),
 };

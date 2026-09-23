@@ -2,6 +2,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { emitOrgEmergency } from "../realtime.js";
 import { emergencyRepository } from "../repositories/emergency.repository.js";
 import { studentRepository } from "../repositories/student.repository.js";
+import { notificationService } from "./notification.service.js";
 import type { CreateEmergencyBody } from "../validators/emergency.validators.js";
 import type { EmergencyStatus } from "@prisma/client";
 
@@ -71,6 +72,13 @@ export const emergencyService = {
 
     const payload = serialize(created);
     emitOrgEmergency(orgId, "emergency:created", payload);
+    void notificationService.notifyRoles(orgId, ["GUARD", "FACULTY", "ADMIN"], {
+      title: "Emergency SOS",
+      body: `${payload.reportedBy.name} needs help${payload.location ? ` at ${payload.location}` : ""}`,
+      type: "EMERGENCY",
+      channelId: "emergencies",
+      excludeUserId: user.id,
+    });
     return payload;
   },
 
@@ -110,6 +118,14 @@ export const emergencyService = {
     });
     const payload = serialize(updated);
     emitOrgEmergency(orgId, "emergency:updated", payload);
+    void notificationService.notify({
+      organizationId: orgId,
+      userIds: [row.reportedBy.userId],
+      title: "SOS acknowledged",
+      body: "Campus staff has seen your emergency request.",
+      type: "EMERGENCY",
+      channelId: "emergencies",
+    });
     return payload;
   },
 
@@ -126,6 +142,14 @@ export const emergencyService = {
     });
     const payload = serialize(updated);
     emitOrgEmergency(orgId, "emergency:updated", payload);
+    void notificationService.notify({
+      organizationId: orgId,
+      userIds: [row.reportedBy.userId],
+      title: "SOS resolved",
+      body: "Your emergency request has been marked resolved.",
+      type: "EMERGENCY",
+      channelId: "emergencies",
+    });
     return payload;
   },
 };

@@ -1,5 +1,6 @@
 import { ApiError } from "../utils/ApiError.js";
 import { emitOrgMovement } from "../realtime.js";
+import { notificationService } from "./notification.service.js";
 import { guardRepository } from "../repositories/guard.repository.js";
 import { movementRepository } from "../repositories/movement.repository.js";
 import { qrRepository } from "../repositories/qr.repository.js";
@@ -82,6 +83,14 @@ export const movementService = {
 
     const payload = serialize(log);
     emitOrgMovement(orgId, payload);
+    const label = nextType === "CHECK_IN" ? "checked in" : "checked out";
+    void notificationService.notify({
+      organizationId: orgId,
+      userIds: [identity.student.userId],
+      title: nextType === "CHECK_IN" ? "Checked in" : "Checked out",
+      body: `You ${label}${payload.location ? ` at ${payload.location}` : ""}.`,
+      type: nextType,
+    });
     return payload;
   },
 

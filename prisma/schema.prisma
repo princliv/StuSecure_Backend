@@ -76,6 +76,7 @@ model Organization {
   emergencies    Emergency[]
   helpRequests   HelpRequest[]
   notifications  Notification[]
+  deviceTokens   DeviceToken[]
   auditLogs      AuditLog[]
 }
 
@@ -94,6 +95,7 @@ model User {
   securityGuard SecurityGuard?
   faculty       Faculty?
   notifications Notification[]
+  deviceTokens  DeviceToken[]
   auditLogs     AuditLog[]      @relation("AuditLogActor")
   emergencies   Emergency[]     @relation("EmergencyResolver")
 
@@ -269,6 +271,25 @@ model Notification {
   isRead         Boolean          @default(false)
   createdAt      DateTime         @default(now())
   readAt         DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
+
+  @@index([organizationId])
+  @@index([userId])
+}
+
+/// One push token per device. Token is unique so a re-login on the same phone
+/// reassigns the row to the current user.
+model DeviceToken {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  token          String   @unique
+  platform       String
+  provider       String   @default("EXPO")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id])
   user         User         @relation(fields: [userId], references: [id])

@@ -1,6 +1,7 @@
 import type { HelpRequestStatus, HelpRequestType } from "@prisma/client";
 import { ApiError } from "../utils/ApiError.js";
 import { emitOrgHelp } from "../realtime.js";
+import { notificationService } from "./notification.service.js";
 import { facultyRepository } from "../repositories/faculty.repository.js";
 import { helpRepository } from "../repositories/help.repository.js";
 import { studentRepository } from "../repositories/student.repository.js";
@@ -79,6 +80,12 @@ export const helpService = {
     });
     const payload = serialize(created);
     emitOrgHelp(orgId, "help:created", payload);
+    void notificationService.notifyRoles(orgId, ["FACULTY", "ADMIN"], {
+      title: "New help request",
+      body: `${payload.student.name}: ${payload.type}`,
+      type: "HELP_REQUEST",
+      excludeUserId: user.id,
+    });
     return payload;
   },
 
@@ -183,6 +190,13 @@ export const helpService = {
     });
     const payload = serialize(updated);
     emitOrgHelp(orgId, "help:updated", payload);
+    void notificationService.notify({
+      organizationId: orgId,
+      userIds: [row.student.userId],
+      title: "Help request in progress",
+      body: "A faculty member has taken your request.",
+      type: "HELP_REQUEST",
+    });
     return payload;
   },
 
@@ -198,6 +212,13 @@ export const helpService = {
     });
     const payload = serialize(updated);
     emitOrgHelp(orgId, "help:updated", payload);
+    void notificationService.notify({
+      organizationId: orgId,
+      userIds: [row.student.userId],
+      title: "Help request resolved",
+      body: "Your help request has been marked resolved.",
+      type: "HELP_REQUEST",
+    });
     return payload;
   },
 

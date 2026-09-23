@@ -29,6 +29,7 @@ export function emitOrgMovement(orgId: string, payload: unknown) {
 
 export function emitOrgEmergency(orgId: string, event: string, payload: unknown) {
   io?.to(`org:${orgId}:emergencies`).emit(event, payload);
+  io?.to(`org:${orgId}:monitoring`).emit(event, payload);
 }
 
 export function emitOrgHelp(orgId: string, event: string, payload: unknown) {
