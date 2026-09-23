@@ -130,17 +130,27 @@ export const movementService = {
 
   list: async (
     orgId: string,
-    query: { page?: unknown; limit?: unknown; studentId?: unknown },
+    query: { page?: unknown; limit?: unknown; studentId?: unknown; from?: unknown; to?: unknown },
   ) => {
     const { page, limit, skip, take } = parsePaging(query);
     const studentId =
       typeof query.studentId === "string" && query.studentId.length > 0
         ? query.studentId
         : undefined;
+    const from =
+      typeof query.from === "string" && !Number.isNaN(Date.parse(query.from))
+        ? new Date(query.from)
+        : undefined;
+    const to =
+      typeof query.to === "string" && !Number.isNaN(Date.parse(query.to))
+        ? new Date(query.to)
+        : undefined;
 
     const [rows, total] = await movementRepository.list({
       organizationId: orgId,
       studentId,
+      from,
+      to,
       skip,
       take,
     });

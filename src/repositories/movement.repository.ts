@@ -43,27 +43,32 @@ export const movementRepository = {
     organizationId: string;
     studentId?: string;
     guardId?: string;
+    from?: Date;
+    to?: Date;
     skip: number;
     take: number;
-  }) =>
-    Promise.all([
+  }) => {
+    const where = {
+      organizationId: args.organizationId,
+      studentId: args.studentId,
+      guardId: args.guardId,
+      createdAt:
+        args.from || args.to
+          ? {
+              gte: args.from,
+              lte: args.to,
+            }
+          : undefined,
+    };
+    return Promise.all([
       prisma.movementLog.findMany({
-        where: {
-          organizationId: args.organizationId,
-          studentId: args.studentId,
-          guardId: args.guardId,
-        },
+        where,
         include: movementInclude,
         orderBy: { createdAt: "desc" },
         skip: args.skip,
         take: args.take,
       }),
-      prisma.movementLog.count({
-        where: {
-          organizationId: args.organizationId,
-          studentId: args.studentId,
-          guardId: args.guardId,
-        },
-      }),
-    ]),
+      prisma.movementLog.count({ where }),
+    ]);
+  },
 };
