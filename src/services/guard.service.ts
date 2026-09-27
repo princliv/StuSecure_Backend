@@ -1,4 +1,7 @@
+import { Prisma } from "@prisma/client";
+import { ApiError } from "../utils/ApiError.js";
 import { guardRepository } from "../repositories/guard.repository.js";
+import type { CreateGuardBody, UpdateGuardBody } from "../validators/guard.validators.js";
 
 function serialize(
   row: NonNullable<Awaited<ReturnType<typeof guardRepository.findByUserId>>>,
@@ -22,13 +25,102 @@ function parsePaging(query: { page?: unknown; limit?: unknown }) {
 }
 
 export const guardService = {
-  list: async (orgId: string, query: { page?: unknown; limit?: unknown }) => {
+  list: async (
+    orgId: string,
+    query: { page?: unknown; limit?: unknown; search?: unknown },
+  ) => {
     const { page, limit, skip, take } = parsePaging(query);
+    const search = typeof query.search === "string" ? query.search : undefined;
     const [rows, total] = await guardRepository.list({
       organizationId: orgId,
+      search,
       skip,
       take,
     });
     return { guards: rows.map(serialize), total, page, limit };
+  },
+
+  create: async (orgId: string, body: CreateGuardBody) => {
+    const existingEmail = await guardRepository.findByEmail(orgId, body.email);
+    if (existingEmail) {
+      throw new ApiError(409, "A user with this email already exists in your organization");
+    }
+    const existingEmployeeId = await guardRepository.findByEmployeeId(orgId, body.employeeId);
+    if (existingEmployeeId) {
+      throw new ApiError(409, "A guard with this employee ID already exists");
+    }
+
+    try {
+      const row = await guardRepository.createWithUser({
+        organizationId: orgId,
+        name: body.name,
+        email: body.email,
+        employeeId: body.employeeId,
+        hostelId: body.hostelId ?? null,
+        shift: body.shift ?? null,
+      });
+      return serialize(row);
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError) {
+        if (err.code === "P2002") {
+          throw new ApiError(409, "A guard with this email or employee ID already exists");
+        }
+        if (err.code === "P2003") {
+          throw new ApiError(400, "Invalid hostelId — no such hostel in your organization");
+        }
+      }
+      throw err;
+    }
+  },
+
+  update: async (orgId: string, id: string, body: UpdateGuardBody) => {
+    const existing = await guardRepository.findById(orgId, id);
+    if (!existing) throw new ApiError(404, "Guard not found");
+
+    if (body.email && body.email !== existing.user.email) {
+      const existingEmail = await guardRepository.findByEmail(orgId, body.email);
+      if (existingEmail) {
+        throw new ApiError(409, "A user with this email already exists in your organization");
+      }
+    }
+
+    try {
+      const row = await guardRepository.updateWithUser(orgId, id, existing.userId, {
+        name: body.name,
+        email: body.email,
+        hostelId: body.hostelId,
+        shift: body.shift,
+      });
+      if (!row) throw new ApiError(404, "Guard not found");
+      return serialize(row);
+    } catch (err) {
+      if (err instanceof ApiError) throw err;
+      if (err instanceof Prisma.PrismaClientKnownRequestError) {
+        if (err.code === "P2002") {
+          throw new ApiError(409, "A guard with this email already exists");
+        }
+        if (err.code === "P2025") {
+          throw new ApiError(404, "Guard not found");
+        }
+        if (err.code === "P2003") {
+          throw new ApiError(400, "Invalid hostelId — no such hostel in your organization");
+        }
+      }
+      throw err;
+    }
+  },
+
+  remove: async (orgId: string, id: string) => {
+    const existing = await guardRepository.findById(orgId, id);
+    if (!existing) throw new ApiError(404, "Guard not found");
+
+    try {
+      await guardRepository.remove(existing.id, existing.userId);
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2003") {
+        throw new ApiError(409, "Cannot delete a guard with existing activity records");
+      }
+      throw err;
+    }
   },
 };

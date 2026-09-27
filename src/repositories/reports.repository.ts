@@ -1,6 +1,26 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../config/database.js";
 import { monitoringRepository } from "./monitoring.repository.js";
+import { movementRepository } from "./movement.repository.js";
+
+// Hard cap on the number of rows a single CSV export can contain, to avoid
+// unbounded memory use for very large date ranges. If a range has more
+// movements than this, the export is silently truncated to the most recent
+// EXPORT_ROW_LIMIT rows.
+export const EXPORT_ROW_LIMIT = 10_000;
+
+const recentMovementInclude = {
+  student: {
+    include: {
+      user: { select: { name: true } },
+      room: {
+        select: {
+          hostel: { select: { name: true } },
+        },
+      },
+    },
+  },
+} as const;
 
 export const reportsRepository = {
   movementCounts: async (organizationId: string, from: Date, to: Date) => {
@@ -41,4 +61,67 @@ export const reportsRepository = {
 
   insideCount: (organizationId: string) =>
     monitoringRepository.insideCountFromLatestLogs(organizationId),
+
+  movementsForExport: async (organizationId: string, from: Date, to: Date) => {
+    const [rows] = await movementRepository.list({
+      organizationId,
+      from,
+      to,
+      skip: 0,
+      take: EXPORT_ROW_LIMIT,
+    });
+    return rows;
+  },
+
+  overview: async (organizationId: string) => {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const [
+      totalStudents,
+      totalGuards,
+      totalHostels,
+      insideCount,
+      openEmergencyCount,
+      pendingHelpCount,
+      todayCheckIns,
+      todayCheckOuts,
+      recentMovements,
+    ] = await Promise.all([
+      prisma.student.count({ where: { organizationId } }),
+      prisma.securityGuard.count({ where: { organizationId } }),
+      prisma.hostel.count({ where: { organizationId } }),
+      monitoringRepository.insideCountFromLatestLogs(organizationId),
+      prisma.emergency.count({
+        where: { organizationId, status: { in: ["ACTIVE", "ACKNOWLEDGED"] } },
+      }),
+      prisma.helpRequest.count({
+        where: { organizationId, status: "PENDING" },
+      }),
+      prisma.movementLog.count({
+        where: { organizationId, type: "CHECK_IN", createdAt: { gte: todayStart } },
+      }),
+      prisma.movementLog.count({
+        where: { organizationId, type: "CHECK_OUT", createdAt: { gte: todayStart } },
+      }),
+      prisma.movementLog.findMany({
+        where: { organizationId },
+        include: recentMovementInclude,
+        orderBy: { createdAt: "desc" },
+        take: 5,
+      }),
+    ]);
+
+    return {
+      totalStudents,
+      totalGuards,
+      totalHostels,
+      insideCount,
+      openEmergencyCount,
+      pendingHelpCount,
+      todayCheckIns,
+      todayCheckOuts,
+      recentMovements,
+    };
+  },
 };

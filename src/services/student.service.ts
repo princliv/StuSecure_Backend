@@ -1,6 +1,8 @@
+import { Prisma } from "@prisma/client";
 import { ApiError } from "../utils/ApiError.js";
 import { movementRepository } from "../repositories/movement.repository.js";
 import { studentRepository } from "../repositories/student.repository.js";
+import type { CreateStudentBody, UpdateStudentBody } from "../validators/student.validators.js";
 
 type AuthUser = { id: string; role: string; organizationId: string };
 
@@ -75,5 +77,89 @@ export const studentService = {
           }
         : null,
     );
+  },
+
+  create: async (orgId: string, body: CreateStudentBody) => {
+    const existingEmail = await studentRepository.findByEmail(orgId, body.email);
+    if (existingEmail) {
+      throw new ApiError(409, "A user with this email already exists in your organization");
+    }
+    const existingEnrollment = await studentRepository.findByEnrollmentNo(orgId, body.enrollmentNo);
+    if (existingEnrollment) {
+      throw new ApiError(409, "A student with this enrollment number already exists");
+    }
+
+    try {
+      const row = await studentRepository.createWithUser({
+        organizationId: orgId,
+        name: body.name,
+        email: body.email,
+        enrollmentNo: body.enrollmentNo,
+        phone: body.phone ?? null,
+        roomId: body.roomId ?? null,
+      });
+      return serialize(row);
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError) {
+        if (err.code === "P2002") {
+          throw new ApiError(409, "A student with this email or enrollment number already exists");
+        }
+        if (err.code === "P2003") {
+          throw new ApiError(400, "Invalid roomId — no such room in your organization");
+        }
+      }
+      throw err;
+    }
+  },
+
+  update: async (orgId: string, id: string, body: UpdateStudentBody) => {
+    const existing = await studentRepository.findById(orgId, id);
+    if (!existing) throw new ApiError(404, "Student not found");
+
+    if (body.email && body.email !== existing.user.email) {
+      const existingEmail = await studentRepository.findByEmail(orgId, body.email);
+      if (existingEmail) {
+        throw new ApiError(409, "A user with this email already exists in your organization");
+      }
+    }
+
+    try {
+      const row = await studentRepository.updateWithUser(orgId, id, existing.userId, {
+        name: body.name,
+        email: body.email,
+        phone: body.phone,
+        roomId: body.roomId,
+      });
+      if (!row) throw new ApiError(404, "Student not found");
+      return serialize(row);
+    } catch (err) {
+      if (err instanceof ApiError) throw err;
+      if (err instanceof Prisma.PrismaClientKnownRequestError) {
+        if (err.code === "P2002") {
+          throw new ApiError(409, "A student with this email already exists");
+        }
+        if (err.code === "P2025") {
+          throw new ApiError(404, "Student not found");
+        }
+        if (err.code === "P2003") {
+          throw new ApiError(400, "Invalid roomId — no such room in your organization");
+        }
+      }
+      throw err;
+    }
+  },
+
+  remove: async (orgId: string, id: string) => {
+    const existing = await studentRepository.findById(orgId, id);
+    if (!existing) throw new ApiError(404, "Student not found");
+
+    try {
+      await studentRepository.remove(existing.id, existing.userId);
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2003") {
+        throw new ApiError(409, "Cannot delete a student with existing activity records");
+      }
+      throw err;
+    }
   },
 };

@@ -12,6 +12,8 @@ import { monitoringRouter } from "./monitoring.routes.js";
 import { studentRouter } from "./student.routes.js";
 import { guardRouter } from "./guard.routes.js";
 import { reportsRouter } from "./reports.routes.js";
+import { hostelRouter } from "./hostel.routes.js";
+import { roomRouter } from "./room.routes.js";
 
 export const apiRouter = Router();
 
@@ -28,3 +30,5 @@ apiRouter.use("/monitoring", monitoringRouter);
 apiRouter.use("/students", studentRouter);
 apiRouter.use("/guards", guardRouter);
 apiRouter.use("/reports", reportsRouter);
+apiRouter.use("/hostels", hostelRouter);
+apiRouter.use("/rooms", roomRouter);

@@ -1,4 +1,5 @@
 import { reportsRepository } from "../repositories/reports.repository.js";
+import { rowsToCsv } from "../utils/csv.js";
 
 function parseRange(query: { from?: unknown; to?: unknown }) {
   const to =
@@ -41,6 +42,57 @@ export const reportsService = {
       insideCount,
       outsideCount: Math.max(0, totalStudents - insideCount),
       byDay: [...byDayMap.values()],
+    };
+  },
+
+  movementsCsv: async (orgId: string, query: { from?: unknown; to?: unknown }) => {
+    const { from, to } = parseRange(query);
+    const logs = await reportsRepository.movementsForExport(orgId, from, to);
+
+    const header = ["Date", "Time", "Student Name", "Enrollment No", "Type", "Hostel", "Room", "Guard Name"];
+    const rows = logs.map((log) => {
+      const createdAt = log.createdAt;
+      return [
+        createdAt.toISOString().slice(0, 10),
+        createdAt.toISOString().slice(11, 19),
+        log.student.user.name,
+        log.student.enrollmentNo,
+        log.type === "CHECK_IN" ? "Check-in" : "Check-out",
+        log.student.room?.hostel.name ?? "",
+        log.student.room?.number ?? "",
+        log.guard.user.name,
+      ];
+    });
+
+    return {
+      csv: rowsToCsv(header, rows),
+      from: from.toISOString().slice(0, 10),
+      to: to.toISOString().slice(0, 10),
+    };
+  },
+
+  overview: async (orgId: string) => {
+    const data = await reportsRepository.overview(orgId);
+    const insideCount = Math.min(data.insideCount, data.totalStudents);
+    const outsideCount = Math.max(0, data.totalStudents - insideCount);
+
+    return {
+      totalStudents: data.totalStudents,
+      totalGuards: data.totalGuards,
+      totalHostels: data.totalHostels,
+      insideCount,
+      outsideCount,
+      openEmergencyCount: data.openEmergencyCount,
+      pendingHelpCount: data.pendingHelpCount,
+      todayCheckIns: data.todayCheckIns,
+      todayCheckOuts: data.todayCheckOuts,
+      recentMovements: data.recentMovements.map((log) => ({
+        id: log.id,
+        type: log.type,
+        timestamp: log.createdAt.toISOString(),
+        studentName: log.student.user.name,
+        hostelName: log.student.room?.hostel.name ?? null,
+      })),
     };
   },
 };

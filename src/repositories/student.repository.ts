@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { prisma } from "../config/database.js";
 
 const studentInclude = {
@@ -65,5 +66,87 @@ export const studentRepository = {
     prisma.student.create({
       data,
       include: studentInclude,
+    }),
+
+  findByEmail: (organizationId: string, email: string) =>
+    prisma.user.findUnique({
+      where: { organizationId_email: { organizationId, email } },
+    }),
+
+  findByEnrollmentNo: (organizationId: string, enrollmentNo: string) =>
+    prisma.student.findUnique({
+      where: { organizationId_enrollmentNo: { organizationId, enrollmentNo } },
+    }),
+
+  /**
+   * Admin-provisioned students don't have a Firebase account yet (creating
+   * one is out of scope for v1 — see Group G's invite flow). `User.firebaseUid`
+   * is `@unique` and non-nullable per the schema, so it can't be left empty.
+   * We use a `pending:<uuid>` placeholder that can never collide with a real
+   * Firebase UID; it gets reconciled to the real UID once the student signs
+   * in for the first time (Group G).
+   */
+  createWithUser: (data: {
+    organizationId: string;
+    name: string;
+    email: string;
+    enrollmentNo: string;
+    phone?: string | null;
+    roomId?: string | null;
+  }) =>
+    prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          organizationId: data.organizationId,
+          firebaseUid: `pending:${randomUUID()}`,
+          name: data.name,
+          email: data.email,
+          role: "STUDENT",
+        },
+      });
+      return tx.student.create({
+        data: {
+          organizationId: data.organizationId,
+          userId: user.id,
+          enrollmentNo: data.enrollmentNo,
+          phone: data.phone ?? null,
+          roomId: data.roomId ?? null,
+        },
+        include: studentInclude,
+      });
+    }),
+
+  updateWithUser: (
+    organizationId: string,
+    id: string,
+    userId: string,
+    data: { name?: string; email?: string; phone?: string; roomId?: string },
+  ) =>
+    prisma.$transaction(async (tx) => {
+      if (data.name !== undefined || data.email !== undefined) {
+        await tx.user.update({
+          where: { id: userId },
+          data: {
+            ...(data.name !== undefined ? { name: data.name } : {}),
+            ...(data.email !== undefined ? { email: data.email } : {}),
+          },
+        });
+      }
+      if (data.phone !== undefined || data.roomId !== undefined) {
+        await tx.student.update({
+          where: { id },
+          data: {
+            ...(data.phone !== undefined ? { phone: data.phone } : {}),
+            ...(data.roomId !== undefined ? { roomId: data.roomId } : {}),
+          },
+        });
+      }
+      return tx.student.findFirst({ where: { organizationId, id }, include: studentInclude });
+    }),
+
+  remove: (id: string, userId: string) =>
+    prisma.$transaction(async (tx) => {
+      await tx.student.delete({ where: { id } });
+      await tx.user.delete({ where: { id: userId } });
     }),
 };
