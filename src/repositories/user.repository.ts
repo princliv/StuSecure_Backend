@@ -5,24 +5,26 @@ export const userRepository = {
   findByFirebaseUid: (firebaseUid: string) =>
     prisma.user.findUnique({
       where: { firebaseUid },
-      include: { organization: true },
+      include: { memberships: { include: { organization: true } } },
     }),
 
-  create: (data: {
-    firebaseUid: string;
-    name: string;
-    email: string;
-    role: Role;
-    organizationId: string;
-  }) =>
+  create: (data: { firebaseUid: string; name: string; email: string }) =>
     prisma.user.create({
       data,
-      include: { organization: true },
+      include: { memberships: { include: { organization: true } } },
     }),
 
-  findIdsByRoles: (organizationId: string, roles: Role[]) =>
-    prisma.user.findMany({
+  /**
+   * Ids of every user holding one of `roles` within `organizationId`.
+   * Queries `Membership` now (role/organizationId no longer live on `User`
+   * directly) but keeps the `{ id: string }[]` return shape so callers
+   * (e.g. `notification.service.ts`'s `notifyRoles`) don't need to change.
+   */
+  findIdsByRoles: async (organizationId: string, roles: Role[]) => {
+    const memberships = await prisma.membership.findMany({
       where: { organizationId, role: { in: roles } },
-      select: { id: true },
-    }),
+      select: { userId: true },
+    });
+    return memberships.map((m) => ({ id: m.userId }));
+  },
 };

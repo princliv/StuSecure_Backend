@@ -45,8 +45,17 @@ export const verifyFirebaseToken = asyncHandler(
 
 /**
  * Verifies the Firebase ID token AND resolves it to an existing StuSecure
- * user (with role + organization). Use this for every route except
+ * user (with their memberships). Use this for every route except
  * `/auth/sync`.
+ *
+ * `role`/`organizationId` default to the user's first membership (so the
+ * type stays non-optional for the ~15 existing read sites) but are just a
+ * placeholder — routes that actually need a resolved *active* org must run
+ * `attachTenant` afterward, which overrides them from the real active
+ * membership (X-Org-Id header, or the single membership, or a clear error
+ * if the active org is ambiguous). A user with zero memberships can still
+ * pass `requireAuth` (e.g. to hit `GET /orgs/mine` or `POST /orgs`) — such
+ * routes must not chain `attachTenant`.
  */
 export const requireAuth = asyncHandler(
   async (req: Request, _res: Response, next: NextFunction) => {
@@ -57,14 +66,38 @@ export const requireAuth = asyncHandler(
     // client or the Firebase token — see docs/StuSecure_SaaS_Plan.md §2.
     const user = await prisma.user.findUnique({
       where: { firebaseUid: decoded.uid },
-      select: { id: true, firebaseUid: true, role: true, organizationId: true },
+      select: {
+        id: true,
+        firebaseUid: true,
+        memberships: {
+          select: {
+            organizationId: true,
+            role: true,
+            organization: { select: { name: true } },
+          },
+        },
+      },
     });
 
     if (!user) {
       throw new ApiError(401, "No StuSecure account for this identity");
     }
 
-    req.user = user;
+    const memberships = user.memberships.map((m) => ({
+      organizationId: m.organizationId,
+      role: m.role,
+      organizationName: m.organization.name,
+    }));
+
+    req.user = {
+      id: user.id,
+      firebaseUid: user.firebaseUid,
+      memberships,
+      // Placeholder default — see docstring above. `attachTenant` overrides
+      // these with the real active membership for routes that need one.
+      role: memberships[0]?.role as (typeof memberships)[number]["role"],
+      organizationId: memberships[0]?.organizationId as string,
+    };
     next();
   },
 );

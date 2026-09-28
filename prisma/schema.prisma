@@ -49,12 +49,19 @@ enum NotificationType {
   SYSTEM
 }
 
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+  EXPIRED
+}
+
 /// A tenant (college / hostel / campus). Every other model is scoped to one
 /// Organization via `organizationId` — see docs/StuSecure_SaaS_Plan.md §2.
 ///
-/// v1 simplification: a User belongs to exactly one Organization (no
-/// many-to-many Membership model yet). Multi-org membership + org switching
-/// is deferred to SaaS_Plan.md Group G ("Invites + multi-org").
+/// Multi-org membership: a User can belong to zero or more Organizations via
+/// the many-to-many `Membership` model (see below) — see
+/// docs/StuSecure_SaaS_Plan.md Group G ("Invites + multi-org").
 model Organization {
   id        String   @id @default(cuid())
   name      String
@@ -65,7 +72,8 @@ model Organization {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users          User[]
+  memberships    Membership[]
+  invites        Invite[]
   hostels        Hostel[]
   rooms          Room[]
   students       Student[]
@@ -81,26 +89,65 @@ model Organization {
 }
 
 model User {
-  id             String   @id @default(cuid())
-  organizationId String
-  firebaseUid    String   @unique
-  name           String
-  email          String
-  role           Role
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id          String   @id @default(cuid())
+  firebaseUid String   @unique
+  name        String
+  email       String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  organization  Organization    @relation(fields: [organizationId], references: [id])
+  memberships   Membership[]
+  invitesSent   Invite[]
   student       Student?
   securityGuard SecurityGuard?
   faculty       Faculty?
   notifications Notification[]
   deviceTokens  DeviceToken[]
-  auditLogs     AuditLog[]      @relation("AuditLogActor")
-  emergencies   Emergency[]     @relation("EmergencyResolver")
+  auditLogs     AuditLog[]     @relation("AuditLogActor")
+  emergencies   Emergency[]    @relation("EmergencyResolver")
 
-  @@unique([organizationId, email])
+  @@unique([email])
+}
+
+/// Many-to-many User <-> Organization, with a role scoped to that
+/// membership. Replaces the v1 single `User.organizationId`/`User.role`
+/// columns — see docs/StuSecure_SaaS_Plan.md Group G.
+model Membership {
+  id             String   @id @default(cuid())
+  userId         String
+  organizationId String
+  role           Role
+  createdAt      DateTime @default(now())
+
+  user         User         @relation(fields: [userId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([userId, organizationId])
+  @@index([userId])
   @@index([organizationId])
+}
+
+/// Link-based invite: an org ADMIN creates one, the invitee accepts it (with
+/// their own Firebase identity) to be provisioned a `User` + `Membership`.
+/// No email is sent — see docs/StuSecure_SaaS_Plan.md Group G design
+/// decision #1.
+model Invite {
+  id              String       @id @default(cuid())
+  organizationId  String
+  email           String
+  role            Role
+  token           String       @unique
+  status          InviteStatus @default(PENDING)
+  invitedByUserId String
+  createdAt       DateTime     @default(now())
+  acceptedAt      DateTime?
+  expiresAt       DateTime
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  invitedBy    User         @relation(fields: [invitedByUserId], references: [id])
+
+  @@index([organizationId])
+  @@index([token])
 }
 
 model Hostel {

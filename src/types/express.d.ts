@@ -15,6 +15,10 @@ declare global {
         firebaseUid: string;
         role: Role;
         organizationId: string;
+        /** Every org this user belongs to. `role`/`organizationId` above are
+         * request-scoped (resolved by `attachTenant`), this is the full list —
+         * see docs/StuSecure_SaaS_Plan.md Group G. */
+        memberships: { organizationId: string; role: Role; organizationName: string }[];
       };
       /** Set by `attachTenant` — the active organization for this request. */
       orgId?: string;

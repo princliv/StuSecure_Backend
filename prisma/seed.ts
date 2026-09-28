@@ -58,16 +58,18 @@ async function main() {
       update: {
         name: demo.name,
         email: demo.email,
-        role: demo.role,
-        organizationId: organization.id,
       },
       create: {
         firebaseUid,
         name: demo.name,
         email: demo.email,
-        role: demo.role,
-        organizationId: organization.id,
       },
+    });
+
+    await prisma.membership.upsert({
+      where: { userId_organizationId: { userId: user.id, organizationId: organization.id } },
+      update: { role: demo.role },
+      create: { userId: user.id, organizationId: organization.id, role: demo.role },
     });
 
     if (demo.role === "STUDENT") {
@@ -134,7 +136,7 @@ async function main() {
       });
     }
 
-    logger.info(`Seeded ${user.role} user: ${user.email} (${user.id})`);
+    logger.info(`Seeded ${demo.role} user: ${user.email} (${user.id})`);
   }
 
   console.log("\nDemo credentials (password is the same for all):");

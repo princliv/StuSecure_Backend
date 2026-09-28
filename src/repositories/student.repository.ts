@@ -68,10 +68,10 @@ export const studentRepository = {
       include: studentInclude,
     }),
 
-  findByEmail: (organizationId: string, email: string) =>
-    prisma.user.findUnique({
-      where: { organizationId_email: { organizationId, email } },
-    }),
+  // Email is now globally unique on `User` (org-scoping moved to
+  // `Membership`) — see docs/StuSecure_SaaS_Plan.md Group G.
+  findByEmail: (_organizationId: string, email: string) =>
+    prisma.user.findUnique({ where: { email } }),
 
   findByEnrollmentNo: (organizationId: string, enrollmentNo: string) =>
     prisma.student.findUnique({
@@ -97,12 +97,13 @@ export const studentRepository = {
     prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
         data: {
-          organizationId: data.organizationId,
           firebaseUid: `pending:${randomUUID()}`,
           name: data.name,
           email: data.email,
-          role: "STUDENT",
         },
+      });
+      await tx.membership.create({
+        data: { userId: user.id, organizationId: data.organizationId, role: "STUDENT" },
       });
       return tx.student.create({
         data: {
@@ -147,6 +148,9 @@ export const studentRepository = {
   remove: (id: string, userId: string) =>
     prisma.$transaction(async (tx) => {
       await tx.student.delete({ where: { id } });
+      // Membership rows reference User with the default RESTRICT — must
+      // clear them before the User row itself can be deleted.
+      await tx.membership.deleteMany({ where: { userId } });
       await tx.user.delete({ where: { id: userId } });
     }),
 };

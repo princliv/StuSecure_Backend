@@ -23,6 +23,7 @@ export const getMe = asyncHandler(async (req: Request, res: Response) => {
     throw new ApiError(401, "Not authenticated");
   }
 
+  // Returns { user, memberships } — same shape as POST /auth/sync.
   const profile = await authService.me(req.user.firebaseUid);
   res.status(200).json(profile);
 });

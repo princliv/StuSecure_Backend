@@ -3,15 +3,17 @@ import { ApiError } from "../utils/ApiError.js";
 
 /**
  * Attaches the active organization to the request. Must run after
- * `requireAuth`. v1: a user belongs to exactly one organization, so this
- * just promotes `req.user.organizationId` to `req.orgId` — the single place
- * every repository reads the tenant scope from.
+ * `requireAuth`. Resolves the *active* membership out of `req.user.memberships`:
  *
- * X-Org-Id header (optional): if the client sends `X-Org-Id`, it is
- * validated against `user.organizationId`. A mismatch → 403. A match →
- * `req.orgId` is set to that value (same as the default, but explicit). When
- * multi-org membership lands (Group G), this is the only place that needs to
- * change to resolve the *active* org from the user's real Membership rows.
+ * - `X-Org-Id` header present → must match one of the user's memberships
+ *   (403 otherwise).
+ * - No header, exactly one membership → use it.
+ * - No header, zero memberships → 403 (no organization membership).
+ * - No header, more than one membership → 400 (ambiguous, client must send
+ *   `X-Org-Id` — mirrors the mobile app's `select-org.tsx` org picker).
+ *
+ * Sets `req.orgId`, `req.user.role`, and `req.user.organizationId` from the
+ * resolved active membership.
  */
 export function attachTenant(req: Request, _res: Response, next: NextFunction) {
   if (!req.user) {
@@ -21,17 +23,51 @@ export function attachTenant(req: Request, _res: Response, next: NextFunction) {
   const xOrgIdHeader = req.headers["x-org-id"];
   const xOrgId = Array.isArray(xOrgIdHeader) ? xOrgIdHeader[0] : xOrgIdHeader;
 
+  const memberships = req.user.memberships;
+
   if (xOrgId) {
-    if (xOrgId !== req.user.organizationId) {
+    const membership = memberships.find((m) => m.organizationId === xOrgId);
+    if (!membership) {
       throw new ApiError(
         403,
         "X-Org-Id does not match your organization — access denied",
       );
     }
-    req.orgId = xOrgId;
+    req.orgId = membership.organizationId;
+    req.user.role = membership.role;
+    req.user.organizationId = membership.organizationId;
+  } else if (memberships.length === 1) {
+    const membership = memberships[0]!;
+    req.orgId = membership.organizationId;
+    req.user.role = membership.role;
+    req.user.organizationId = membership.organizationId;
+  } else if (memberships.length === 0) {
+    throw new ApiError(
+      403,
+      "No organization membership — accept an invite or create an organization",
+    );
   } else {
-    req.orgId = req.user.organizationId;
+    throw new ApiError(
+      400,
+      "Multiple organizations — X-Org-Id header required",
+    );
   }
 
+  next();
+}
+
+/**
+ * Guards `:id`-scoped admin routes (e.g. `/orgs/:id/invites`) so an ADMIN
+ * can only act on their own active org, not an arbitrary org id in the URL.
+ * Must run after `attachTenant`. Added in pass 2 (invites) — see
+ * docs/StuSecure_SaaS_Plan.md Group G.
+ */
+export function requireOwnOrgParam(req: Request, _res: Response, next: NextFunction) {
+  if (!req.orgId) {
+    throw new ApiError(400, "Organization context missing");
+  }
+  if (req.params.id !== req.orgId) {
+    throw new ApiError(403, "Cannot act on a different organization");
+  }
   next();
 }
