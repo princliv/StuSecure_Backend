@@ -14,6 +14,7 @@ interface UserWithMemberships {
   firebaseUid: string;
   email: string;
   name: string;
+  isPlatformAdmin: boolean;
   createdAt: Date;
   memberships: {
     organizationId: string;
@@ -37,6 +38,7 @@ export function serialize(user: UserWithMemberships) {
       firebaseUid: user.firebaseUid,
       email: user.email,
       displayName: user.name,
+      isPlatformAdmin: user.isPlatformAdmin,
       createdAt: user.createdAt.toISOString(),
     },
     memberships,

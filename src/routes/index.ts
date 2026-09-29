@@ -15,6 +15,7 @@ import { reportsRouter } from "./reports.routes.js";
 import { hostelRouter } from "./hostel.routes.js";
 import { roomRouter } from "./room.routes.js";
 import { inviteRouter } from "./invite.routes.js";
+import { platformRouter } from "./platform.routes.js";
 
 export const apiRouter = Router();
 
@@ -34,3 +35,4 @@ apiRouter.use("/reports", reportsRouter);
 apiRouter.use("/hostels", hostelRouter);
 apiRouter.use("/rooms", roomRouter);
 apiRouter.use("/invites", inviteRouter);
+apiRouter.use("/platform", platformRouter);

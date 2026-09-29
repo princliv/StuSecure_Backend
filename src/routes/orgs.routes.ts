@@ -2,7 +2,7 @@ import { Router } from "express";
 import { requireAuth } from "../middleware/auth.middleware.js";
 import { attachTenant, requireOwnOrgParam } from "../middleware/tenant.middleware.js";
 import { requireRole } from "../middleware/rbac.middleware.js";
-import { createOrg, getMine, switchOrg } from "../controllers/orgs.controller.js";
+import { createOrg, getMine, getPlanUsage, switchOrg } from "../controllers/orgs.controller.js";
 import {
   createInvite,
   importInvites,
@@ -36,3 +36,7 @@ orgsRouter.post("/:id/invites", ...inviteAdminGuards, createInvite);
 orgsRouter.get("/:id/invites", ...inviteAdminGuards, listInvites);
 orgsRouter.delete("/:id/invites/:inviteId", ...inviteAdminGuards, revokeInvite);
 orgsRouter.post("/:id/invites/import", ...inviteAdminGuards, importInvites);
+
+// Plan usage — same ADMIN-only, own-org-only guard pattern as invites. See
+// docs/StuSecure_SaaS_Plan.md Group G2.
+orgsRouter.get("/:id/plan-usage", ...inviteAdminGuards, getPlanUsage);

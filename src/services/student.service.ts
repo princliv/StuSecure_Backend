@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { ApiError } from "../utils/ApiError.js";
 import { movementRepository } from "../repositories/movement.repository.js";
 import { studentRepository } from "../repositories/student.repository.js";
+import { assertUnderPlanLimit } from "./plan.service.js";
 import type { CreateStudentBody, UpdateStudentBody } from "../validators/student.validators.js";
 
 type AuthUser = { id: string; role: string; organizationId: string };
@@ -88,6 +89,7 @@ export const studentService = {
     if (existingEnrollment) {
       throw new ApiError(409, "A student with this enrollment number already exists");
     }
+    await assertUnderPlanLimit(orgId, "STUDENT");
 
     try {
       const row = await studentRepository.createWithUser({

@@ -5,6 +5,7 @@ import { prisma } from "../config/database.js";
 import { parseCsv } from "../utils/csv.js";
 import { inviteRepository } from "../repositories/invite.repository.js";
 import { userRepository } from "../repositories/user.repository.js";
+import { assertUnderPlanLimit } from "./plan.service.js";
 import { serialize as serializeAuth } from "./auth.service.js";
 import type { CreateInviteBody } from "../validators/invite.validators.js";
 
@@ -65,6 +66,12 @@ async function createOne(
   if (existing) {
     throw new ApiError(409, `A pending invite already exists for ${email}`);
   }
+
+  // Early, non-authoritative check: reject invite *creation* if the org is
+  // already at/over its plan limit for this role, so an admin gets
+  // immediate feedback instead of generating an invite that will fail at
+  // accept time (accept() below re-checks — that's the authoritative point).
+  await assertUnderPlanLimit(organizationId, role);
 
   return inviteRepository.create({
     organizationId,
@@ -154,6 +161,12 @@ export const inviteService = {
         email: firebaseIdentity.email,
       });
     }
+
+    // Authoritative enforcement point: a membership must never be created
+    // past the plan limit, even if createOne()'s earlier check passed at
+    // invite-creation time (limits could have changed, or other members
+    // could have joined since).
+    await assertUnderPlanLimit(invite.organizationId, invite.role);
 
     // Idempotent: re-accepting (or already being a member) succeeds rather
     // than erroring — `@@unique([userId, organizationId])` makes this a

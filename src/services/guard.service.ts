@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { ApiError } from "../utils/ApiError.js";
 import { guardRepository } from "../repositories/guard.repository.js";
+import { assertUnderPlanLimit } from "./plan.service.js";
 import type { CreateGuardBody, UpdateGuardBody } from "../validators/guard.validators.js";
 
 function serialize(
@@ -49,6 +50,7 @@ export const guardService = {
     if (existingEmployeeId) {
       throw new ApiError(409, "A guard with this employee ID already exists");
     }
+    await assertUnderPlanLimit(orgId, "GUARD");
 
     try {
       const row = await guardRepository.createWithUser({

@@ -3,6 +3,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { prisma } from "../config/database.js";
 import { slugify } from "../utils/slug.js";
 import { serialize } from "./auth.service.js";
+import { getRoleUsage } from "./plan.service.js";
 
 export interface OrgMembership {
   organizationId: string;
@@ -55,5 +56,27 @@ export const orgsService = {
     });
 
     return serialize(result);
+  },
+
+  /**
+   * GET /orgs/:id/plan-usage — current membership counts vs the org's plan
+   * limits, per role. See docs/StuSecure_SaaS_Plan.md Group G2.
+   */
+  planUsage: async (organizationId: string) => {
+    const [students, guards, faculty, admins] = await Promise.all([
+      getRoleUsage(organizationId, "STUDENT"),
+      getRoleUsage(organizationId, "GUARD"),
+      getRoleUsage(organizationId, "FACULTY"),
+      getRoleUsage(organizationId, "ADMIN"),
+    ]);
+    return {
+      plan: students.plan,
+      usage: {
+        students: { current: students.current, limit: students.limit },
+        guards: { current: guards.current, limit: guards.limit },
+        faculty: { current: faculty.current, limit: faculty.limit },
+        admins: { current: admins.current, limit: admins.limit },
+      },
+    };
   },
 };

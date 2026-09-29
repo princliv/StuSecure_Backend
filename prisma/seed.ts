@@ -46,6 +46,11 @@ async function resolveFirebaseUid(email: string, name: string): Promise<string> 
   }
 }
 
+const PLATFORM_ADMIN = {
+  name: "Platform Admin",
+  email: "platform-admin@demo.stusecure.app",
+};
+
 async function main() {
   const organization = await organizationRepository.getOrCreateDefault();
   logger.info(`Demo organization ready: ${organization.name} (${organization.id})`);
@@ -139,8 +144,35 @@ async function main() {
     logger.info(`Seeded ${demo.role} user: ${user.email} (${user.id})`);
   }
 
+  // Platform super-admin — orthogonal to org membership (design decision #1,
+  // docs/StuSecure_SaaS_Plan.md Group G3): no Membership row, no org tie.
+  const platformFirebaseUid = await resolveFirebaseUid(
+    PLATFORM_ADMIN.email,
+    PLATFORM_ADMIN.name,
+  );
+  const platformAdminUser = await prisma.user.upsert({
+    where: { firebaseUid: platformFirebaseUid },
+    update: {
+      name: PLATFORM_ADMIN.name,
+      email: PLATFORM_ADMIN.email,
+      isPlatformAdmin: true,
+    },
+    create: {
+      firebaseUid: platformFirebaseUid,
+      name: PLATFORM_ADMIN.name,
+      email: PLATFORM_ADMIN.email,
+      isPlatformAdmin: true,
+    },
+  });
+  logger.info(
+    `Seeded platform admin user: ${platformAdminUser.email} (${platformAdminUser.id})`,
+  );
+
   console.log("\nDemo credentials (password is the same for all):");
-  console.table(DEMO_USERS.map(({ role, email }) => ({ role, email, password: DEMO_PASSWORD })));
+  console.table([
+    ...DEMO_USERS.map(({ role, email }) => ({ role, email, password: DEMO_PASSWORD })),
+    { role: "PLATFORM_ADMIN", email: PLATFORM_ADMIN.email, password: DEMO_PASSWORD },
+  ]);
 }
 
 main()

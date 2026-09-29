@@ -33,11 +33,17 @@ export function attachTenant(req: Request, _res: Response, next: NextFunction) {
         "X-Org-Id does not match your organization — access denied",
       );
     }
+    if (membership.organizationStatus !== "ACTIVE") {
+      throw new ApiError(403, "This organization has been suspended");
+    }
     req.orgId = membership.organizationId;
     req.user.role = membership.role;
     req.user.organizationId = membership.organizationId;
   } else if (memberships.length === 1) {
     const membership = memberships[0]!;
+    if (membership.organizationStatus !== "ACTIVE") {
+      throw new ApiError(403, "This organization has been suspended");
+    }
     req.orgId = membership.organizationId;
     req.user.role = membership.role;
     req.user.organizationId = membership.organizationId;

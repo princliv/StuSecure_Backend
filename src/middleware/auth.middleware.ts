@@ -69,11 +69,12 @@ export const requireAuth = asyncHandler(
       select: {
         id: true,
         firebaseUid: true,
+        isPlatformAdmin: true,
         memberships: {
           select: {
             organizationId: true,
             role: true,
-            organization: { select: { name: true } },
+            organization: { select: { name: true, status: true } },
           },
         },
       },
@@ -87,11 +88,13 @@ export const requireAuth = asyncHandler(
       organizationId: m.organizationId,
       role: m.role,
       organizationName: m.organization.name,
+      organizationStatus: m.organization.status,
     }));
 
     req.user = {
       id: user.id,
       firebaseUid: user.firebaseUid,
+      isPlatformAdmin: user.isPlatformAdmin,
       memberships,
       // Placeholder default — see docstring above. `attachTenant` overrides
       // these with the real active membership for routes that need one.

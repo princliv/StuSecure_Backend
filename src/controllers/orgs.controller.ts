@@ -40,3 +40,13 @@ export const createOrg = asyncHandler(async (req: Request, res: Response) => {
   const result = await orgsService.create(req.user.id, parsed.data.name);
   res.status(201).json(result);
 });
+
+/**
+ * GET /api/orgs/:id/plan-usage
+ * Current membership counts vs the org's plan limits, per role.
+ */
+export const getPlanUsage = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.orgId) throw new ApiError(400, "Organization context missing");
+  const result = await orgsService.planUsage(req.orgId);
+  res.status(200).json(result);
+});
