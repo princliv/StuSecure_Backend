@@ -4,6 +4,7 @@ import { attachTenant, requireOwnOrgParam } from "../middleware/tenant.middlewar
 import { requireRole } from "../middleware/rbac.middleware.js";
 import {
   createOrg,
+  getAuditLogs,
   getMine,
   getPlanUsage,
   switchOrg,
@@ -50,3 +51,7 @@ orgsRouter.post("/:id/invites/import", ...inviteAdminGuards, importInvites);
 // Plan usage — same ADMIN-only, own-org-only guard pattern as invites. See
 // docs/StuSecure_SaaS_Plan.md Group G2.
 orgsRouter.get("/:id/plan-usage", ...inviteAdminGuards, getPlanUsage);
+
+// Audit log — same ADMIN-only, own-org-only guard pattern as invites. See
+// docs/StuSecure_SaaS_Plan.md §8 "Audit log includes org + actor".
+orgsRouter.get("/:id/audit-logs", ...inviteAdminGuards, getAuditLogs);

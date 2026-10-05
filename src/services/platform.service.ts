@@ -2,6 +2,7 @@ import type { Role } from "@prisma/client";
 import { ApiError } from "../utils/ApiError.js";
 import { orgsService } from "./orgs.service.js";
 import { platformRepository } from "../repositories/platform.repository.js";
+import { auditLogService } from "./auditLog.service.js";
 import type { UpdateOrganizationBody } from "../validators/platform.validators.js";
 
 function parsePaging(query: { page?: unknown; limit?: unknown }) {
@@ -83,13 +84,25 @@ export const platformService = {
    * PATCH /platform/organizations/:id — the only place that ever writes
    * `Organization.plan`/`.status`.
    */
-  updateOrganization: async (id: string, body: UpdateOrganizationBody) => {
+  updateOrganization: async (id: string, body: UpdateOrganizationBody, actorUserId: string | null) => {
     const existing = await platformRepository.findOrganizationById(id);
     if (!existing) throw new ApiError(404, "Organization not found");
 
     const updated = await platformRepository.updateOrganization(id, {
       plan: body.plan,
       status: body.status,
+    });
+
+    const changed: Record<string, unknown> = {};
+    if (body.plan !== undefined) changed.plan = body.plan;
+    if (body.status !== undefined) changed.status = body.status;
+    await auditLogService.record({
+      organizationId: id,
+      actorUserId,
+      action: "organization.plan_status_update",
+      entityType: "Organization",
+      entityId: id,
+      metadata: changed,
     });
 
     return {

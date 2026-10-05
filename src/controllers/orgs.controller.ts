@@ -53,7 +53,7 @@ export const updateOrgProfile = asyncHandler(async (req: Request, res: Response)
     throw new ApiError(400, parsed.error.issues[0]?.message ?? "Invalid organization data");
   }
 
-  const result = await orgsService.updateProfile(req.orgId, parsed.data);
+  const result = await orgsService.updateProfile(req.orgId, parsed.data, req.user?.id ?? null);
   res.status(200).json(result);
 });
 
@@ -64,5 +64,15 @@ export const updateOrgProfile = asyncHandler(async (req: Request, res: Response)
 export const getPlanUsage = asyncHandler(async (req: Request, res: Response) => {
   if (!req.orgId) throw new ApiError(400, "Organization context missing");
   const result = await orgsService.planUsage(req.orgId);
+  res.status(200).json(result);
+});
+
+/**
+ * GET /api/orgs/:id/audit-logs
+ * Paginated, optionally filtered by entityType, newest-first.
+ */
+export const getAuditLogs = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.orgId) throw new ApiError(400, "Organization context missing");
+  const result = await orgsService.auditLogs(req.orgId, req.query);
   res.status(200).json(result);
 });

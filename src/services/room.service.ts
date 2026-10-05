@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { ApiError } from "../utils/ApiError.js";
 import { roomRepository } from "../repositories/room.repository.js";
 import { hostelRepository } from "../repositories/hostel.repository.js";
+import { auditLogService } from "./auditLog.service.js";
 import type { CreateRoomBody, UpdateRoomBody } from "../validators/room.validators.js";
 
 function serialize(
@@ -41,7 +42,7 @@ export const roomService = {
     return { rooms: rows.map(serialize), total, page, limit };
   },
 
-  create: async (orgId: string, body: CreateRoomBody) => {
+  create: async (orgId: string, body: CreateRoomBody, actorUserId: string | null) => {
     const hostel = await hostelRepository.findById(orgId, body.hostelId);
     if (!hostel) throw new ApiError(404, "Hostel not found");
 
@@ -57,6 +58,14 @@ export const roomService = {
         number: body.number,
         capacity: body.capacity ?? null,
       });
+      await auditLogService.record({
+        organizationId: orgId,
+        actorUserId,
+        action: "room.create",
+        entityType: "Room",
+        entityId: row.id,
+        metadata: { number: row.number, hostelId: body.hostelId },
+      });
       return serialize(row);
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError) {
@@ -71,7 +80,7 @@ export const roomService = {
     }
   },
 
-  update: async (orgId: string, id: string, body: UpdateRoomBody) => {
+  update: async (orgId: string, id: string, body: UpdateRoomBody, actorUserId: string | null) => {
     const existing = await roomRepository.findById(orgId, id);
     if (!existing) throw new ApiError(404, "Room not found");
 
@@ -87,6 +96,17 @@ export const roomService = {
         number: body.number,
         capacity: body.capacity,
       });
+      const changed: Record<string, unknown> = {};
+      if (body.number !== undefined) changed.number = body.number;
+      if (body.capacity !== undefined) changed.capacity = body.capacity;
+      await auditLogService.record({
+        organizationId: orgId,
+        actorUserId,
+        action: "room.update",
+        entityType: "Room",
+        entityId: row.id,
+        metadata: changed,
+      });
       return serialize(row);
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError) {
@@ -101,12 +121,20 @@ export const roomService = {
     }
   },
 
-  remove: async (orgId: string, id: string) => {
+  remove: async (orgId: string, id: string, actorUserId: string | null) => {
     const existing = await roomRepository.findById(orgId, id);
     if (!existing) throw new ApiError(404, "Room not found");
 
     try {
       await roomRepository.remove(id);
+      await auditLogService.record({
+        organizationId: orgId,
+        actorUserId,
+        action: "room.delete",
+        entityType: "Room",
+        entityId: existing.id,
+        metadata: { number: existing.number, hostelId: existing.hostel.id },
+      });
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2003") {
         throw new ApiError(409, "Cannot delete a room with assigned students");

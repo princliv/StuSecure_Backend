@@ -7,6 +7,7 @@ import { inviteRepository } from "../repositories/invite.repository.js";
 import { userRepository } from "../repositories/user.repository.js";
 import { assertUnderPlanLimit } from "./plan.service.js";
 import { serialize as serializeAuth } from "./auth.service.js";
+import { auditLogService } from "./auditLog.service.js";
 import type { CreateInviteBody } from "../validators/invite.validators.js";
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -73,7 +74,7 @@ async function createOne(
   // accept time (accept() below re-checks — that's the authoritative point).
   await assertUnderPlanLimit(organizationId, role);
 
-  return inviteRepository.create({
+  const invite = await inviteRepository.create({
     organizationId,
     email,
     role,
@@ -81,6 +82,17 @@ async function createOne(
     invitedByUserId,
     expiresAt: new Date(Date.now() + INVITE_TTL_MS),
   });
+
+  await auditLogService.record({
+    organizationId,
+    actorUserId: invitedByUserId,
+    action: "invite.create",
+    entityType: "Invite",
+    entityId: invite.id,
+    metadata: { email, role },
+  });
+
+  return invite;
 }
 
 export const inviteService = {
@@ -107,7 +119,7 @@ export const inviteService = {
     return { invites: rows.map(serialize), total, page, limit };
   },
 
-  revoke: async (orgId: string, inviteId: string) => {
+  revoke: async (orgId: string, inviteId: string, actorUserId: string | null) => {
     const existing = await inviteRepository.findById(orgId, inviteId);
     if (!existing) throw new ApiError(404, "Invite not found");
     if (existing.status !== "PENDING") {
@@ -119,6 +131,14 @@ export const inviteService = {
     // convention, because invite history (who was invited, by whom, when)
     // is audit-relevant. See plan's Group G invite feature spec.
     await inviteRepository.revoke(inviteId);
+    await auditLogService.record({
+      organizationId: orgId,
+      actorUserId,
+      action: "invite.revoke",
+      entityType: "Invite",
+      entityId: existing.id,
+      metadata: { email: existing.email },
+    });
   },
 
   preview: async (token: string) => {

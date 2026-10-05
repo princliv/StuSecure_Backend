@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { ApiError } from "../utils/ApiError.js";
 import { guardRepository } from "../repositories/guard.repository.js";
 import { assertUnderPlanLimit } from "./plan.service.js";
+import { auditLogService } from "./auditLog.service.js";
 import type { CreateGuardBody, UpdateGuardBody } from "../validators/guard.validators.js";
 
 function serialize(
@@ -41,7 +42,7 @@ export const guardService = {
     return { guards: rows.map(serialize), total, page, limit };
   },
 
-  create: async (orgId: string, body: CreateGuardBody) => {
+  create: async (orgId: string, body: CreateGuardBody, actorUserId: string | null) => {
     const existingEmail = await guardRepository.findByEmail(orgId, body.email);
     if (existingEmail) {
       throw new ApiError(409, "A user with this email already exists in your organization");
@@ -61,6 +62,14 @@ export const guardService = {
         hostelId: body.hostelId ?? null,
         shift: body.shift ?? null,
       });
+      await auditLogService.record({
+        organizationId: orgId,
+        actorUserId,
+        action: "guard.create",
+        entityType: "SecurityGuard",
+        entityId: row.id,
+        metadata: { name: row.user.name, email: row.user.email, employeeId: row.employeeId },
+      });
       return serialize(row);
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError) {
@@ -75,7 +84,7 @@ export const guardService = {
     }
   },
 
-  update: async (orgId: string, id: string, body: UpdateGuardBody) => {
+  update: async (orgId: string, id: string, body: UpdateGuardBody, actorUserId: string | null) => {
     const existing = await guardRepository.findById(orgId, id);
     if (!existing) throw new ApiError(404, "Guard not found");
 
@@ -94,6 +103,19 @@ export const guardService = {
         shift: body.shift,
       });
       if (!row) throw new ApiError(404, "Guard not found");
+      const changed: Record<string, unknown> = {};
+      if (body.name !== undefined) changed.name = body.name;
+      if (body.email !== undefined) changed.email = body.email;
+      if (body.hostelId !== undefined) changed.hostelId = body.hostelId;
+      if (body.shift !== undefined) changed.shift = body.shift;
+      await auditLogService.record({
+        organizationId: orgId,
+        actorUserId,
+        action: "guard.update",
+        entityType: "SecurityGuard",
+        entityId: row.id,
+        metadata: changed,
+      });
       return serialize(row);
     } catch (err) {
       if (err instanceof ApiError) throw err;
@@ -112,12 +134,20 @@ export const guardService = {
     }
   },
 
-  remove: async (orgId: string, id: string) => {
+  remove: async (orgId: string, id: string, actorUserId: string | null) => {
     const existing = await guardRepository.findById(orgId, id);
     if (!existing) throw new ApiError(404, "Guard not found");
 
     try {
       await guardRepository.remove(existing.id, existing.userId);
+      await auditLogService.record({
+        organizationId: orgId,
+        actorUserId,
+        action: "guard.delete",
+        entityType: "SecurityGuard",
+        entityId: existing.id,
+        metadata: { email: existing.user.email, employeeId: existing.employeeId },
+      });
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2003") {
         throw new ApiError(409, "Cannot delete a guard with existing activity records");

@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { ApiError } from "../utils/ApiError.js";
 import { hostelRepository } from "../repositories/hostel.repository.js";
+import { auditLogService } from "./auditLog.service.js";
 import type { CreateHostelBody, UpdateHostelBody } from "../validators/hostel.validators.js";
 
 function serializeListRow(row: {
@@ -64,7 +65,7 @@ export const hostelService = {
     return serializeDetail(row);
   },
 
-  create: async (orgId: string, body: CreateHostelBody) => {
+  create: async (orgId: string, body: CreateHostelBody, actorUserId: string | null) => {
     const existing = await hostelRepository.findByName(orgId, body.name);
     if (existing) {
       throw new ApiError(409, "A hostel with this name already exists");
@@ -75,6 +76,14 @@ export const hostelService = {
         organizationId: orgId,
         name: body.name,
       });
+      await auditLogService.record({
+        organizationId: orgId,
+        actorUserId,
+        action: "hostel.create",
+        entityType: "Hostel",
+        entityId: row.id,
+        metadata: { name: row.name },
+      });
       return serializeListRow(row);
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
@@ -84,7 +93,7 @@ export const hostelService = {
     }
   },
 
-  update: async (orgId: string, id: string, body: UpdateHostelBody) => {
+  update: async (orgId: string, id: string, body: UpdateHostelBody, actorUserId: string | null) => {
     const existing = await hostelRepository.findById(orgId, id);
     if (!existing) throw new ApiError(404, "Hostel not found");
 
@@ -97,6 +106,14 @@ export const hostelService = {
 
     try {
       const row = await hostelRepository.update(orgId, id, { name: body.name });
+      await auditLogService.record({
+        organizationId: orgId,
+        actorUserId,
+        action: "hostel.update",
+        entityType: "Hostel",
+        entityId: row.id,
+        metadata: body.name !== undefined ? { name: body.name } : {},
+      });
       return serializeListRow(row);
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError) {
@@ -111,12 +128,20 @@ export const hostelService = {
     }
   },
 
-  remove: async (orgId: string, id: string) => {
+  remove: async (orgId: string, id: string, actorUserId: string | null) => {
     const existing = await hostelRepository.findById(orgId, id);
     if (!existing) throw new ApiError(404, "Hostel not found");
 
     try {
       await hostelRepository.remove(id);
+      await auditLogService.record({
+        organizationId: orgId,
+        actorUserId,
+        action: "hostel.delete",
+        entityType: "Hostel",
+        entityId: existing.id,
+        metadata: { name: existing.name },
+      });
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2003") {
         throw new ApiError(409, "Cannot delete a hostel with existing rooms or guards");

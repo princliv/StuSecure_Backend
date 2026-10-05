@@ -3,6 +3,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { movementRepository } from "../repositories/movement.repository.js";
 import { studentRepository } from "../repositories/student.repository.js";
 import { assertUnderPlanLimit } from "./plan.service.js";
+import { auditLogService } from "./auditLog.service.js";
 import type { CreateStudentBody, UpdateStudentBody } from "../validators/student.validators.js";
 
 type AuthUser = { id: string; role: string; organizationId: string };
@@ -80,7 +81,7 @@ export const studentService = {
     );
   },
 
-  create: async (orgId: string, body: CreateStudentBody) => {
+  create: async (orgId: string, body: CreateStudentBody, actorUserId: string | null) => {
     const existingEmail = await studentRepository.findByEmail(orgId, body.email);
     if (existingEmail) {
       throw new ApiError(409, "A user with this email already exists in your organization");
@@ -100,6 +101,14 @@ export const studentService = {
         phone: body.phone ?? null,
         roomId: body.roomId ?? null,
       });
+      await auditLogService.record({
+        organizationId: orgId,
+        actorUserId,
+        action: "student.create",
+        entityType: "Student",
+        entityId: row.id,
+        metadata: { name: row.user.name, email: row.user.email, enrollmentNo: row.enrollmentNo },
+      });
       return serialize(row);
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError) {
@@ -114,7 +123,7 @@ export const studentService = {
     }
   },
 
-  update: async (orgId: string, id: string, body: UpdateStudentBody) => {
+  update: async (orgId: string, id: string, body: UpdateStudentBody, actorUserId: string | null) => {
     const existing = await studentRepository.findById(orgId, id);
     if (!existing) throw new ApiError(404, "Student not found");
 
@@ -133,6 +142,19 @@ export const studentService = {
         roomId: body.roomId,
       });
       if (!row) throw new ApiError(404, "Student not found");
+      const changed: Record<string, unknown> = {};
+      if (body.name !== undefined) changed.name = body.name;
+      if (body.email !== undefined) changed.email = body.email;
+      if (body.phone !== undefined) changed.phone = body.phone;
+      if (body.roomId !== undefined) changed.roomId = body.roomId;
+      await auditLogService.record({
+        organizationId: orgId,
+        actorUserId,
+        action: "student.update",
+        entityType: "Student",
+        entityId: row.id,
+        metadata: changed,
+      });
       return serialize(row);
     } catch (err) {
       if (err instanceof ApiError) throw err;
@@ -151,12 +173,20 @@ export const studentService = {
     }
   },
 
-  remove: async (orgId: string, id: string) => {
+  remove: async (orgId: string, id: string, actorUserId: string | null) => {
     const existing = await studentRepository.findById(orgId, id);
     if (!existing) throw new ApiError(404, "Student not found");
 
     try {
       await studentRepository.remove(existing.id, existing.userId);
+      await auditLogService.record({
+        organizationId: orgId,
+        actorUserId,
+        action: "student.delete",
+        entityType: "Student",
+        entityId: existing.id,
+        metadata: { email: existing.user.email, enrollmentNo: existing.enrollmentNo },
+      });
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2003") {
         throw new ApiError(409, "Cannot delete a student with existing activity records");

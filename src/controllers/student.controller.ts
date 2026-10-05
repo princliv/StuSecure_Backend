@@ -29,19 +29,19 @@ export const getStudentById = asyncHandler(async (req: Request, res: Response) =
 export const createStudent = asyncHandler(async (req: Request, res: Response) => {
   if (!req.orgId) throw new ApiError(400, "Organization context missing");
   const body = createStudentBodySchema.parse(req.body);
-  const result = await studentService.create(req.orgId, body);
+  const result = await studentService.create(req.orgId, body, req.user?.id ?? null);
   res.status(201).json(result);
 });
 
 export const updateStudent = asyncHandler(async (req: Request, res: Response) => {
   if (!req.orgId) throw new ApiError(400, "Organization context missing");
   const body = updateStudentBodySchema.parse(req.body);
-  const result = await studentService.update(req.orgId, req.params.id as string, body);
+  const result = await studentService.update(req.orgId, req.params.id as string, body, req.user?.id ?? null);
   res.status(200).json(result);
 });
 
 export const deleteStudent = asyncHandler(async (req: Request, res: Response) => {
   if (!req.orgId) throw new ApiError(400, "Organization context missing");
-  await studentService.remove(req.orgId, req.params.id as string);
+  await studentService.remove(req.orgId, req.params.id as string, req.user?.id ?? null);
   res.status(204).send();
 });

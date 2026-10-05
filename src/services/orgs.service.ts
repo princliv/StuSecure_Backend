@@ -4,6 +4,8 @@ import { prisma } from "../config/database.js";
 import { slugify } from "../utils/slug.js";
 import { serialize } from "./auth.service.js";
 import { getRoleUsage } from "./plan.service.js";
+import { auditLogService } from "./auditLog.service.js";
+import { auditLogRepository } from "../repositories/auditLog.repository.js";
 
 export interface OrgMembership {
   organizationId: string;
@@ -66,6 +68,7 @@ export const orgsService = {
   updateProfile: async (
     organizationId: string,
     body: { name?: string; logoUrl?: string; primaryColor?: string },
+    actorUserId: string | null,
   ) => {
     const updated = await prisma.organization.update({
       where: { id: organizationId },
@@ -74,6 +77,19 @@ export const orgsService = {
         ...(body.logoUrl !== undefined ? { logoUrl: body.logoUrl } : {}),
         ...(body.primaryColor !== undefined ? { primaryColor: body.primaryColor } : {}),
       },
+    });
+
+    const changed: Record<string, unknown> = {};
+    if (body.name !== undefined) changed.name = body.name;
+    if (body.logoUrl !== undefined) changed.logoUrl = body.logoUrl;
+    if (body.primaryColor !== undefined) changed.primaryColor = body.primaryColor;
+    await auditLogService.record({
+      organizationId,
+      actorUserId,
+      action: "organization.profile_update",
+      entityType: "Organization",
+      entityId: organizationId,
+      metadata: changed,
     });
 
     return {
@@ -106,6 +122,44 @@ export const orgsService = {
         faculty: { current: faculty.current, limit: faculty.limit },
         admins: { current: admins.current, limit: admins.limit },
       },
+    };
+  },
+
+  /**
+   * GET /orgs/:id/audit-logs — administrative/structural mutation history
+   * for the org (people, places, invites, org settings). See
+   * docs/StuSecure_SaaS_Plan.md §8 "Audit log includes org + actor".
+   */
+  auditLogs: async (
+    organizationId: string,
+    query: { page?: unknown; limit?: unknown; entityType?: unknown },
+  ) => {
+    const page = Math.max(1, Number(query.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(query.limit) || 20));
+    const entityType = typeof query.entityType === "string" ? query.entityType : undefined;
+
+    const [rows, total] = await auditLogRepository.list({
+      organizationId,
+      entityType,
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+
+    return {
+      auditLogs: rows.map((row) => ({
+        id: row.id,
+        action: row.action,
+        entityType: row.entityType,
+        entityId: row.entityId,
+        metadata: row.metadata,
+        createdAt: row.createdAt.toISOString(),
+        actor: row.actor
+          ? { id: row.actor.id, name: row.actor.name, email: row.actor.email }
+          : null,
+      })),
+      total,
+      page,
+      limit,
     };
   },
 };

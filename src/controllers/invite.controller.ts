@@ -24,7 +24,7 @@ export const listInvites = asyncHandler(async (req: Request, res: Response) => {
 
 export const revokeInvite = asyncHandler(async (req: Request, res: Response) => {
   if (!req.orgId) throw new ApiError(400, "Organization context missing");
-  await inviteService.revoke(req.orgId, req.params.inviteId as string);
+  await inviteService.revoke(req.orgId, req.params.inviteId as string, req.user?.id ?? null);
   res.status(204).send();
 });
 
