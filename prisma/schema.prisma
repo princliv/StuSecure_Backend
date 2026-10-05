@@ -67,6 +67,7 @@ model Organization {
   name      String
   slug      String   @unique
   logoUrl   String?
+  primaryColor String?
   plan      String   @default("FREE")
   status    String   @default("ACTIVE")
   createdAt DateTime @default(now())

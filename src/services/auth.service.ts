@@ -19,16 +19,20 @@ interface UserWithMemberships {
   memberships: {
     organizationId: string;
     role: Role;
-    organization: { id: string; name: string };
+    organization: { id: string; name: string; logoUrl?: string | null; primaryColor?: string | null };
   }[];
 }
 
 /** Shared `{ user, memberships }` response shape reused by `/auth/sync`,
- * `/auth/me`, `POST /orgs`, and (pass 2) invite acceptance. */
+ * `/auth/me`, `POST /orgs`, and (pass 2) invite acceptance. Includes
+ * branding (logoUrl/primaryColor) per org — see
+ * docs/StuSecure_SaaS_Plan.md Group G4. */
 export function serialize(user: UserWithMemberships) {
   const memberships = user.memberships.map((m) => ({
     organizationId: m.organizationId,
     organizationName: m.organization.name,
+    organizationLogoUrl: m.organization.logoUrl ?? null,
+    organizationPrimaryColor: m.organization.primaryColor ?? null,
     role: m.role,
   }));
 

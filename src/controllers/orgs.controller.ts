@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { orgsService } from "../services/orgs.service.js";
-import { createOrgSchema } from "../validators/orgs.validators.js";
+import { createOrgSchema, updateOrgProfileSchema } from "../validators/orgs.validators.js";
 
 /**
  * GET /api/orgs/mine
@@ -39,6 +39,22 @@ export const createOrg = asyncHandler(async (req: Request, res: Response) => {
 
   const result = await orgsService.create(req.user.id, parsed.data.name);
   res.status(201).json(result);
+});
+
+/**
+ * PATCH /api/orgs/:id
+ * Org self-service profile update (name/logoUrl/primaryColor).
+ */
+export const updateOrgProfile = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.orgId) throw new ApiError(400, "Organization context missing");
+
+  const parsed = updateOrgProfileSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    throw new ApiError(400, parsed.error.issues[0]?.message ?? "Invalid organization data");
+  }
+
+  const result = await orgsService.updateProfile(req.orgId, parsed.data);
+  res.status(200).json(result);
 });
 
 /**

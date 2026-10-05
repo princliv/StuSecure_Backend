@@ -59,6 +59,35 @@ export const orgsService = {
   },
 
   /**
+   * PATCH /orgs/:id — org self-service profile update (name/logo/color).
+   * ADMIN-only, own-org-only (gated by requireOwnOrgParam in the route).
+   * See docs/StuSecure_SaaS_Plan.md Group G4.
+   */
+  updateProfile: async (
+    organizationId: string,
+    body: { name?: string; logoUrl?: string; primaryColor?: string },
+  ) => {
+    const updated = await prisma.organization.update({
+      where: { id: organizationId },
+      data: {
+        ...(body.name !== undefined ? { name: body.name } : {}),
+        ...(body.logoUrl !== undefined ? { logoUrl: body.logoUrl } : {}),
+        ...(body.primaryColor !== undefined ? { primaryColor: body.primaryColor } : {}),
+      },
+    });
+
+    return {
+      id: updated.id,
+      name: updated.name,
+      slug: updated.slug,
+      logoUrl: updated.logoUrl,
+      primaryColor: updated.primaryColor,
+      plan: updated.plan,
+      status: updated.status,
+    };
+  },
+
+  /**
    * GET /orgs/:id/plan-usage — current membership counts vs the org's plan
    * limits, per role. See docs/StuSecure_SaaS_Plan.md Group G2.
    */
