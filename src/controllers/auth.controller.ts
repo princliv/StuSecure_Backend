@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { authService } from "../services/auth.service.js";
-import { syncBodySchema } from "../validators/auth.validators.js";
+import { claimBodySchema, syncBodySchema } from "../validators/auth.validators.js";
 
 export const syncUser = asyncHandler(async (req: Request, res: Response) => {
   if (!req.firebaseToken) {
@@ -14,6 +14,17 @@ export const syncUser = asyncHandler(async (req: Request, res: Response) => {
     req.firebaseToken,
     parsedBody.success ? parsedBody.data : undefined,
   );
+
+  res.status(200).json(result);
+});
+
+export const claimUser = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.firebaseToken) {
+    throw new ApiError(401, "Not authenticated");
+  }
+
+  const body = claimBodySchema.parse(req.body);
+  const result = await authService.claim(req.firebaseToken, body);
 
   res.status(200).json(result);
 });

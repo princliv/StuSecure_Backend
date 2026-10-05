@@ -9,3 +9,15 @@ export const syncBodySchema = z.object({
 });
 
 export type SyncBody = z.infer<typeof syncBodySchema>;
+
+/**
+ * Body for `POST /auth/claim` — claiming an admin-pre-provisioned
+ * Student/Guard/Faculty account. `organization` is the typed
+ * `Organization.slug`.
+ */
+export const claimBodySchema = z.object({
+  displayName: z.string().trim().min(1, "Display name is required").max(120),
+  organization: z.string().trim().min(1, "Organization is required"),
+});
+
+export type ClaimBody = z.infer<typeof claimBodySchema>;

@@ -14,6 +14,15 @@ export const userRepository = {
       include: { memberships: { include: { organization: true } } },
     }),
 
+  /** Canonical, org-ignoring lookup by email — used by the claim flow
+   * (`POST /auth/claim`). `student.repository.ts`/`guard.repository.ts` have
+   * their own duplicated `findByEmail` for different purposes; left as-is. */
+  findByEmail: (email: string) =>
+    prisma.user.findUnique({
+      where: { email },
+      include: { memberships: { include: { organization: true } } },
+    }),
+
   /**
    * Ids of every user holding one of `roles` within `organizationId`.
    * Queries `Membership` now (role/organizationId no longer live on `User`
